@@ -35,7 +35,7 @@ Before using this script, ensure you have the following installed:
 ## 📁 Project Structure
 
 ```
-mongodb-backup-script/
+mongodb-backup-restore-automation/
 ├── mongodb_backup_restore.bat    # Main batch script
 ├── backup-config.json           # Configuration file
 ├── README.md                    # This file

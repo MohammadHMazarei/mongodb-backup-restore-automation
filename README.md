@@ -256,14 +256,14 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## 🔄 Version History
 
-# **v1.1.0** - June 2025
+### **v1.1.0** - June 2025
 - Added option to backup target database before restore
 - Added option to keep or remove source backup files
 - Improved OS compatibility
 - Enhanced error handling
 - Fixed script closing automatically issue
 
-- **v1.0.0** - Initial release
+### **v1.0.0** - Initial release
 - Basic backup and restore functionality
 - JSON configuration support
 - Authentication support

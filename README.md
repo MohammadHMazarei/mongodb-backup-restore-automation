@@ -60,6 +60,8 @@ Edit the `backup-config.json` file with your specific settings:
 {
 "mongoToolsPath": "C:\\Program Files\\MongoDB\\Tools\\100\\bin",
 "backupDirectory": "backup-dir",
+"keep-source-dump": true,
+"backup-target": true,
 "source": {
   "host": "source-host",
   "port": "source-port",
@@ -84,6 +86,8 @@ Edit the `backup-config.json` file with your specific settings:
 |-----------|-------------|---------|
 | `mongoToolsPath` | Full path to MongoDB tools directory | `"C:\\Program Files\\MongoDB\\Tools\\100\\bin"` |
 | `backupDirectory` | Directory where backup files will be stored | `"D:\\backups"` or `"backup-dir"` |
+| `keep-source-dump` | Whether to keep source backup files after restore | `"true"` or `"false"` |
+| `backup-target` | Whether to backup target database before restore | `"true"` or `"false"` |
 | `source.host` | Source MongoDB server hostname/IP | `"localhost"` or `"127.0.0.1"` |
 | `source.port` | Source MongoDB server port | `"27017"` |
 | `source.authenticationDatabase` | Authentication database (usually "admin") | `"admin"` |
@@ -116,34 +120,13 @@ Edit the `backup-config.json` file with your specific settings:
 
 ### Example Scenarios
 
-#### Scenario 1: Local to Local Backup
-```json
-{
-"mongoToolsPath": "C:\\Program Files\\MongoDB\\Tools\\100\\bin",
-"backupDirectory": "C:\\temp\\backups",
-"source": {
-  "host": "localhost",
-  "port": "27017",
-  "authenticationDatabase": "admin",
-  "username": "",
-  "password": ""
-},
-"target": {
-  "host": "localhost",
-  "port": "27018",
-  "authenticationDatabase": "admin",
-  "username": "",
-  "password": ""
-},
-"backupName": "local_migration"
-}
-```
-
-#### Scenario 2: Remote to Local Migration
+#### Remote to Local Migration
 ```json
 {
 "mongoToolsPath": "C:\\Program Files\\MongoDB\\Tools\\100\\bin",
 "backupDirectory": "D:\\database_migrations",
+"keep-source-dump": true,
+"backup-target": true,
 "source": {
   "host": "production-server.company.com",
   "port": "27017",
@@ -273,7 +256,14 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## 🔄 Version History
 
-- **v1.0.0** - Initial release
+### **v1.1.0** - June 2025
+- Added option to backup target database before restore
+- Added option to keep or remove source backup files
+- Improved OS compatibility
+- Enhanced error handling
+- Fixed script closing automatically issue
+
+### **v1.0.0** - Initial release
 - Basic backup and restore functionality
 - JSON configuration support
 - Authentication support

@@ -43,6 +43,12 @@ echo.
 set "PARSING_SOURCE=false"
 set "PARSING_TARGET=false"
 
+:: Initialize keep-source-dump to false by default
+set "KEEP_SOURCE_DUMP=false"
+
+:: Initialize backup-target to true by default
+set "BACKUP_TARGET=true"
+
 :: Read and parse JSON configuration file
 for /f "usebackq delims=" %%i in ("%CONFIG_FILE%") do (
     set "line=%%i"
@@ -122,6 +128,45 @@ for /f "usebackq delims=" %%i in ("%CONFIG_FILE%") do (
         set "PARSING_SOURCE=false"
         set "PARSING_TARGET=true"
     )
+
+    :: Parse keep-source-dump
+    echo !line! | findstr /c:"keep-source-dump" >nul
+    if !errorlevel! equ 0 (
+        for /f "tokens=1,* delims=:" %%a in ("!line!") do (
+            set "temp=%%b"
+            set "temp=!temp:"=!"
+            set "temp=!temp:,=!"
+            :: Remove leading spaces
+            if "!temp:~0,1!"==" " set "temp=!temp:~1!"
+            :: Remove trailing spaces
+            :trim_keep_dump
+            if "!temp:~-1!"==" " (
+                set "temp=!temp:~0,-1!"
+                goto trim_keep_dump
+            )
+            set "KEEP_SOURCE_DUMP=!temp!"
+        )
+    )
+
+    :: Parse backup-target
+    echo !line! | findstr /c:"backup-target" >nul
+    if !errorlevel! equ 0 (
+        for /f "tokens=1,* delims=:" %%a in ("!line!") do (
+            set "temp=%%b"
+            set "temp=!temp:"=!"
+            set "temp=!temp:,=!"
+            :: Remove leading spaces
+            if "!temp:~0,1!"==" " set "temp=!temp:~1!"
+            :: Remove trailing spaces
+            :trim_backup_target
+            if "!temp:~-1!"==" " (
+                set "temp=!temp:~0,-1!"
+                goto trim_backup_target
+            )
+            set "BACKUP_TARGET=!temp!"
+        )
+    )
+
     
     :: Parse host
     echo !line! | findstr /c:"host" >nul
@@ -196,7 +241,7 @@ for /f "usebackq delims=" %%i in ("%CONFIG_FILE%") do (
             for /f "tokens=1,* delims=:" %%a in ("!line!") do (
                 set "temp=%%b"
                 set "temp=!temp:"=!"
-                set "temp=!temp:,=!"
+                set "temp=!temp:,=!"echo Keep Source Dump: %KEEP_SOURCE_DUMP%
                 if "!temp:~0,1!"==" " set "temp=!temp:~1!"
                 :trim_src_auth
                 if "!temp:~-1!"==" " (
@@ -309,6 +354,8 @@ echo   Auth DB: %TGT_AUTH_DB%
 echo   Username: %TGT_USERNAME%
 echo.
 echo Backup Name: %BACKUP_NAME%
+echo Keep Source Dump: %KEEP_SOURCE_DUMP%
+echo Backup Target Before Restore: %BACKUP_TARGET%
 echo ==========================================================
 echo.
 
@@ -371,10 +418,68 @@ if /i "%TGT_HOST%"=="127.0.0.1" set "TGT_IS_LOCALHOST=true"
 if /i "%TGT_HOST%"=="::1" set "TGT_IS_LOCALHOST=true"
 
 :: Create log file with timestamp in the same directory as the batch file
-for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
-set "TIMESTAMP=%dt:~0,8%_%dt:~8,6%"
+set "TIMESTAMP=%date:~10,4%%date:~4,2%%date:~7,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
+set "TIMESTAMP=%TIMESTAMP: =0%"
 set "LOG_FILE=%SCRIPT_DIR%mongodb_backup_restore_%TIMESTAMP%.log"
 echo. > "%LOG_FILE%"
+
+:: Create target backup name with timestamp
+set "TARGET_BACKUP_NAME=%BACKUP_NAME%_target_%TIMESTAMP%"
+
+:: Check if target database exists and backup if enabled
+if /i "%BACKUP_TARGET%"=="true" (
+    echo ==========================================================
+    echo STEP 1: BACKING UP TARGET DATABASE
+    echo ==========================================================
+    echo Starting target database backup...
+    echo Starting target database backup... >> "%LOG_FILE%"
+    echo Target backup will be saved as: %TARGET_BACKUP_NAME%
+    echo Target backup will be saved as: %TARGET_BACKUP_NAME% >> "%LOG_FILE%"
+    echo.
+
+    :: Perform mongodump with or without authentication
+    echo Executing mongodump for target... >> "%LOG_FILE%"
+    echo Executing mongodump for target...
+
+    if "!TGT_IS_LOCALHOST!"=="true" (
+        echo Backing up target from localhost without authentication... >> "%LOG_FILE%"
+        echo Backing up target from localhost without authentication...
+        mongodump --host="%TGT_HOST%" --port="%TGT_PORT%" --out="%TARGET_BACKUP_NAME%" >> "%LOG_FILE%" 2>&1
+    ) else (
+        if "%TGT_USERNAME%"=="" (
+            echo Backing up target from remote host without authentication... >> "%LOG_FILE%"
+            echo Backing up target from remote host without authentication...
+            mongodump --host="%TGT_HOST%" --port="%TGT_PORT%" --out="%TARGET_BACKUP_NAME%" >> "%LOG_FILE%" 2>&1
+        ) else (
+            echo Backing up target from remote host with authentication... >> "%LOG_FILE%"
+            echo Backing up target from remote host with authentication...
+            mongodump --host="%TGT_HOST%" --port="%TGT_PORT%" --authenticationDatabase="%TGT_AUTH_DB%" -u="%TGT_USERNAME%" -p="%TGT_PASSWORD%" --out="%TARGET_BACKUP_NAME%" >> "%LOG_FILE%" 2>&1
+        )
+    )
+
+    :: Check if target mongodump was successful
+    if !errorlevel! equ 0 (
+        set "TARGET_BACKUP_SUCCESS=true"
+        echo Target database backup completed successfully >> "%LOG_FILE%"
+        echo Target database backup completed successfully
+        echo.
+    ) else (
+        echo WARNING: Target database backup failed, but continuing with restore... >> "%LOG_FILE%"
+        echo WARNING: Target database backup failed, but continuing with restore...
+        echo Please check the log file for details: %LOG_FILE% >> "%LOG_FILE%"
+        echo Please check the log file for details: %LOG_FILE%
+        echo.
+    )
+) else (
+    echo Skipping target database backup as per configuration... >> "%LOG_FILE%"
+    echo Skipping target database backup as per configuration...
+    echo.
+)
+
+
+echo ==========================================================
+echo STEP 2: BACKING UP SOURCE DATABASE
+echo ==========================================================
 
 echo Starting MongoDB backup process at %date% %time% >> "%LOG_FILE%"
 echo Starting MongoDB backup process at %date% %time%
@@ -412,6 +517,10 @@ echo MongoDB backup completed successfully
 echo Starting MongoDB restore process at %date% %time% >> "%LOG_FILE%"
 echo Starting MongoDB restore process at %date% %time%
 
+echo ==========================================================
+echo STEP 3: RESTORING TO TARGET DATABASE
+echo ==========================================================
+
 :: Perform mongorestore with or without authentication
 echo Executing mongorestore... >> "%LOG_FILE%"
 echo Executing mongorestore...
@@ -437,20 +546,32 @@ if %errorlevel% equ 0 (
     echo MongoDB restore completed successfully >> "%LOG_FILE%"
     echo MongoDB restore completed successfully
     
-    :: Delete backup files
-    echo Cleaning up backup files... >> "%LOG_FILE%"
-    echo Cleaning up backup files...
-    rmdir /s /q ".\%BACKUP_NAME%"
-    echo Backup files deleted. >> "%LOG_FILE%"
-    echo Backup files deleted.
+    :: Check if we should keep or delete source backup files
+    if /i "%KEEP_SOURCE_DUMP%"=="false" (
+        echo Cleaning up source backup files... >> "%LOG_FILE%"
+        echo Cleaning up source backup files...
+        rmdir /s /q ".\%BACKUP_NAME%"
+        echo Source backup files deleted. >> "%LOG_FILE%"
+        echo Source backup files deleted.
+    ) else (
+        echo Keeping source backup files as requested in configuration... >> "%LOG_FILE%"
+        echo Keeping source backup files as requested in configuration...
+    )
+
+    :: Target backup files are always kept for safety
+    if /i "%BACKUP_TARGET%"=="true" (
+        echo Target backup files preserved at: .\%TARGET_BACKUP_NAME% >> "%LOG_FILE%"
+        echo Target backup files preserved at: .\%TARGET_BACKUP_NAME%
+    )
 ) else (
-    echo ERROR: mongorestore failed. Backup files will be preserved. >> "%LOG_FILE%"
-    echo ERROR: mongorestore failed. Backup files will be preserved.
+    echo ERROR: mongorestore failed. All backup files will be preserved. >> "%LOG_FILE%"
+    echo ERROR: mongorestore failed. All backup files will be preserved.
     echo Please check the log file for details: %LOG_FILE% >> "%LOG_FILE%"
     echo Please check the log file for details: %LOG_FILE%
     pause
     exit /b 1
 )
+
 
 echo MongoDB backup and restore process completed at %date% %time% >> "%LOG_FILE%"
 echo MongoDB backup and restore process completed at %date% %time%
@@ -459,5 +580,4 @@ echo MongoDB backup and restore process completed at %date% %time%
 cd /d "%SCRIPT_DIR%"
 echo Script execution finished.
 pause
-
 
